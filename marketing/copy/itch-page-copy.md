@@ -13,7 +13,7 @@ Turn gameplay screenshots into every store asset your itch page needs — covers
 tool, asset-generator, key-art, cover-maker, marketing, gamedev, screenshots, itch-io
 
 ## Pricing
-Pay what you want, minimum $4. Suggested $6. 20% launch discount week one.
+Pay what you want, minimum $5. 20% launch discount week one.
 
 ## Long description
 **Stop fighting aspect ratios. Feed CapsuleForge your screenshots; get every store asset back.**
@@ -24,6 +24,9 @@ machine — open it and work.
 
 **Exact itch.io dimensions as presets**
 itch cover 630×500 · thumbnail 315×250 · OG/Twitter card 1200×630 · square avatar 512×512 · banner 960×540 · wide capsule 800×450
+
+**Steam preset pack** (full version)
+header 920×430 · small 462×174 · main 1232×706 · vertical 748×896 · library capsule 600×900 · hero 3840×1240 · logo 1280×720
 
 **6 art-directed templates** — Ember, Ocean, Violet, Gold, Mono, Toxic. One click, whole new mood.
 

@@ -20,6 +20,9 @@ browsers; use it on a phone to iterate on key art from your camera roll.
 
 - **Exact itch.io dimensions as presets** — cover 630×500, thumbnail 315×250,
   OG/Twitter card 1200×630, square 512×512, banner 960×540, wide 800×450
+- **Steam preset pack** (paid version only) — header 920×430, small 462×174,
+  main 1232×706, vertical 748×896, library capsule 600×900, hero 3840×1240,
+  logo 1280×720 — verified against Valve's current store/library spec
 - **6 art-directed templates** (Ember, Ocean, Violet, Gold, Mono, Toxic)
 - **Drag-and-drop screenshots** as backgrounds, with a crop slider
 - **Seeded sample key-art generator** — evaluate the tool with zero assets
@@ -47,7 +50,8 @@ browsers; use it on a phone to iterate on key art from your camera roll.
 - `android/` — WebView wrapper app (APK for the itch.io android channel)
 - `marketing/butler-push.sh` — release pipeline: rebuilds zips, pushes via butler
 - `marketing/capsuleforge-full.zip` — paid download (rebuilt from source by the script)
-- `marketing/capsuleforge-itch-demo.zip` — free web demo (batch export UI-gated)
+- `marketing/capsuleforge-itch-demo.zip` — free web demo (batch export UI-gated,
+  Steam preset pack stripped — itch.io sizes only)
 - `samples/` — six template renders (what the tool produces out of the box)
 - `showcase.png` — all six templates side by side
 

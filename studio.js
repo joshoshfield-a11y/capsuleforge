@@ -7,7 +7,7 @@
 const CONFIG = {
   ITCH_USER: "skitworks",          // <-- your itch.io username (skitworks.itch.io 404s as of 2026-10-04 — replace!)
   PROJECT_SLUG: "capsuleforge",
-  VERSION: "1.0.0",
+  VERSION: "1.1.0",
 };
 const ITCH_URL = `https://${CONFIG.ITCH_USER}.itch.io/${CONFIG.PROJECT_SLUG}`;
 
@@ -20,7 +20,7 @@ const TEMPLATES = {
   mono:   { name: "Mono",   g: ["#23232b", "#0c0c10"], glow: "#c8c8d8", grad: "vertical" },
   toxic:  { name: "Toxic",  g: ["#12290f", "#060f05"], glow: "#7dff5c", grad: "vertical" },
 };
-const SIZES = [
+const ITCH_SIZES = [
   ["cover",   630,  500,  "itch cover"],
   ["thumb",   315,  250,  "itch thumbnail"],
   ["og",      1200, 630,  "OG/Twitter card"],
@@ -28,6 +28,19 @@ const SIZES = [
   ["banner",  960,  540,  "banner 16:9"],
   ["cap16",   800,  450,  "wide capsule"],
 ];
+/* ----- Steam preset pack: paid tier. The free-demo build strips this array
+ * (see marketing/butler-push.sh) — demo users get itch.io sizes only.
+ * Dimensions verified against Valve's current store/library spec. ----- */
+const STEAM_SIZES = [
+  ["st-head",  920,  430,  "Steam header"],
+  ["st-small", 462,  174,  "Steam small"],
+  ["st-main",  1232, 706,  "Steam main"],
+  ["st-vert",  748,  896,  "Steam vertical"],
+  ["st-lib",   600,  900,  "Steam library"],
+  ["st-hero",  3840, 1240, "Steam hero"],
+  ["st-logo",  1280, 720,  "Steam logo"],
+];
+const SIZES = [...ITCH_SIZES, ...STEAM_SIZES];
 const PLATFORMS = ["Windows", "macOS", "Linux", "Web", "Android"];
 const FONTS = {
   // Google-font-backed stacks load when online (display=swap); system fallbacks keep it offline-capable
@@ -549,7 +562,8 @@ function init() {
     const [id, W, H] = SIZES.find(s => s[0] === state.size);
     download(render(W, H), `${slug(state.title)}-${id}-${W}x${H}.png`);
   };
-  $("exportall").onclick = async () => {
+  // export-all is swapped for an upsell link in the free demo build — guard it
+  if ($("exportall")) $("exportall").onclick = async () => {
     for (const [id, W, H] of SIZES) {
       download(render(W, H), `${slug(state.title)}-${id}-${W}x${H}.png`);
       await new Promise(r => setTimeout(r, 350)); // let the browser breathe between downloads

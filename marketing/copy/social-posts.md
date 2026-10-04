@@ -12,7 +12,7 @@ art-directed templates, platform badges, crop + composition controls, and
 one-click batch export of all sizes.
 
 There's a playable demo right on the itch page — no install, works on mobile
-too. If it saves you time, the full version is pay-what-you-want ($4 min).
+too. If it saves you time, the full version is pay-what-you-want ($5 min).
 Would love feedback on which templates/formats to add next.
 
 ## r/gamedev (Marketing Monday thread)

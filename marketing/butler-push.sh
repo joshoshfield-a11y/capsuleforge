@@ -21,7 +21,7 @@ set -euo pipefail
 
 ITCH_USER="${ITCH_USER:-skitworks}"   # <-- your itch.io username (or export ITCH_USER)
 PROJECT="$ITCH_USER/capsuleforge"
-VERSION="1.0.0"
+VERSION="1.1.0"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/.." && pwd)"
 OUT="$DIR"
@@ -53,10 +53,22 @@ python3 - "$TMP/index.html" "$UPSELL" <<'EOF'
 import sys
 p, url = sys.argv[1], sys.argv[2]
 s = open(p).read()
-old = '<button id="exportall" style="width:100%">⬇⬇ Export every itch.io size</button>'
-new = f'<button style="width:100%" onclick="window.open(\'{url}\',\'_blank\')">⬆ Get batch export + all sizes — full version</button>'
+old = '<button id="exportall" style="width:100%">⬇⬇ Export every size (itch.io + Steam)</button>'
+new = f'<button style="width:100%" onclick="window.open(\'{url}\',\'_blank\')">⬆ Get batch export + Steam sizes — full version</button>'
 assert old in s, "exportall button markup changed — update this script"
 open(p, "w").write(s.replace(old, new))
+EOF
+# Strip the Steam preset pack from the demo's studio.js (paid-tier gating).
+# UI-level only, same as the batch-export upsell above: the demo build simply
+# has no Steam sizes to select or export.
+python3 - "$TMP/studio.js" <<'EOF'
+import re, sys
+p = sys.argv[1]
+s = open(p).read()
+pat = re.compile(r"const STEAM_SIZES = \[.*?\];", re.DOTALL)
+s2, n = pat.subn("const STEAM_SIZES = []; // stripped in demo build", s)
+assert n == 1, f"expected 1 STEAM_SIZES block, found {n} — update this script"
+open(p, "w").write(s2)
 EOF
 (cd "$TMP" && zip -q -9 "$OUT/capsuleforge-itch-demo.zip" index.html studio.js)
 rm -rf "$TMP"
