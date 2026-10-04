@@ -19,7 +19,7 @@
 # versioning (patch/diff uploads).
 set -euo pipefail
 
-ITCH_USER="${ITCH_USER:-skitworks}"   # <-- your itch.io username (or export ITCH_USER)
+ITCH_USER="${ITCH_USER:-SkiticusPrime}"   # <-- your itch.io username (or export ITCH_USER)
 PROJECT="$ITCH_USER/capsuleforge"
 VERSION="1.1.0"
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -27,9 +27,9 @@ ROOT="$(cd "$DIR/.." && pwd)"
 OUT="$DIR"
 APK="$ROOT/android/app/build/outputs/apk/release/app-release.apk"
 
-if [ "$ITCH_USER" = "skitworks" ]; then
-  echo "WARNING: ITCH_USER is still the 'skitworks' placeholder."
-  echo "skitworks.itch.io does not resolve — set your real username:"
+if [ "$ITCH_USER" = "CHANGEME" ]; then
+  echo "WARNING: ITCH_USER is still the placeholder."
+  echo "the placeholder does not resolve — set your real username:"
   echo "  ITCH_USER=yourname $0"
   echo "Continuing with placeholder in 5s (Ctrl-C to stop)…"
   sleep 5

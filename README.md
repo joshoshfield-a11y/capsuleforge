@@ -57,7 +57,7 @@ browsers; use it on a phone to iterate on key art from your camera roll.
 
 ## Before you publish
 
-1. Set your itch.io username: `export ITCH_USER=yourname` (or edit `CONFIG.ITCH_USER`
+1. itch.io username is set (`SkiticusPrime` in `studio.js` + `marketing/butler-push.sh`). Override with `export ITCH_USER=othername` if needed.
    in `studio.js`). The `skitworks` placeholder does not resolve.
 2. In `index.html`, replace `OG_IMAGE_URL` with the absolute https URL of your
    hosted `marketing/ember-OG-Twitter_card_1200×630.png` so link shares render a card.

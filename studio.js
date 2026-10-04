@@ -5,7 +5,7 @@
  * Set these once before publishing. The demo zip's upsell button and the
  * butler deploy script read the same values (see marketing/butler-push.sh). */
 const CONFIG = {
-  ITCH_USER: "skitworks",          // <-- your itch.io username (skitworks.itch.io 404s as of 2026-10-04 — replace!)
+  ITCH_USER: "SkiticusPrime",
   PROJECT_SLUG: "capsuleforge",
   VERSION: "1.1.0",
 };
