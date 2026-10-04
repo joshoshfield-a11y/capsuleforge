@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.capsuleforge.app'
+    compileSdk 35
+    buildToolsVersion "35.0.0"
+
+    defaultConfig {
+        applicationId "com.capsuleforge.app"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    lint {
+        // lint-gradle isn't in the offline cache; skip vital checks on release
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// Sync the web studio into assets before every build — single source of truth.
+// (Web files live at the repo root, one level above this android/ dir.)
+tasks.register('syncWebAssets', Copy) {
+    from(rootProject.file('../index.html'), rootProject.file('../studio.js'))
+    into('src/main/assets')
+}
+tasks.named('preBuild').configure { dependsOn('syncWebAssets') }
+
+dependencies {
+    // none — plain framework APIs only (fully offline build)
+}

@@ -1,6 +1,16 @@
 /* CapsuleForge engine — client-side canvas compositing. No dependencies. */
 "use strict";
 
+/* ---------- site config ----------
+ * Set these once before publishing. The demo zip's upsell button and the
+ * butler deploy script read the same values (see marketing/butler-push.sh). */
+const CONFIG = {
+  ITCH_USER: "skitworks",          // <-- your itch.io username (skitworks.itch.io 404s as of 2026-10-04 — replace!)
+  PROJECT_SLUG: "capsuleforge",
+  VERSION: "1.0.0",
+};
+const ITCH_URL = `https://${CONFIG.ITCH_USER}.itch.io/${CONFIG.PROJECT_SLUG}`;
+
 /* ---------- templates ---------- */
 const TEMPLATES = {
   ember:  { name: "Ember",  g: ["#2b0f14", "#0e0e14"], glow: "#ff5c5c", grad: "vertical" },
@@ -41,7 +51,7 @@ const state = {
   images: [], bgIndex: -1, sample: null,
   title: "HALCYON EXPANSE",
   tagline: "A hand-drawn journey through the ruin belt",
-  dev: "skitworks", accent: "#ff5c5c", textcolor: "#ffffff",
+  dev: "", accent: "#ff5c5c", textcolor: "#ffffff",
   glow: 40, vig: 35, grad: 55, tsize: 0, crop: 50,
   font: "block", ls: 6, upper: true, stroke: 70, strokecol: "#000000", grain: 0, blur: 0,
   safe: false, wm: false,
@@ -53,16 +63,18 @@ const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 function hexA(hex, a) {
-  const n = parseInt(hex.slice(1), 16);
+  let h = hex.slice(1);
+  if (h.length === 3) h = h.split("").map(c => c + c).join(""); // expand #rgb → #rrggbb
+  const n = parseInt(h, 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-/* cover-draw an image into rect, honoring crop slider */
+/* cover-draw an image into rect, honoring crop slider (crop zooms in from cover-fit) */
 function drawCover(ctx, img, W, H, crop, blur) {
   const iw = img.width, ih = img.height;
   const base = Math.max(W / iw, H / ih);
-  const zoom = lerp(base, Math.max(W, H) / Math.min(iw, ih), crop / 100 * 0.6);
+  const zoom = base * (1 + (crop / 100) * 0.6);
   const dw = iw * zoom, dh = ih * zoom;
   if (blur > 0 && "filter" in ctx) ctx.filter = `blur(${blur}px)`;
   ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
@@ -146,8 +158,9 @@ function anchorPoint(a, W, H, pad) {
 
 function drawTextBlock(ctx, W, H, o) {
   const pad = Math.round(Math.min(W, H) * 0.055);
-  // when badges are on, lift bottom-anchored text so rows don't collide
-  const lift = o.badges ? Math.round(min(W, H) * 0.105) : 0;
+  // when badges are actually drawn, lift bottom-anchored text so rows don't collide
+  const badgesDrawn = o.badges && o.plats && o.plats.length > 0;
+  const lift = badgesDrawn ? Math.round(Math.min(W, H) * 0.105) : 0;
   const [ax0, ay0] = anchorPoint(o.anchor, W, H, pad);
   const ax = ax0, ay = o.anchor[0] === "b" ? ay0 - lift : ay0;
   const align = o.anchor[1] === "l" ? "left" : o.anchor[1] === "r" ? "right" : "center";
@@ -168,7 +181,7 @@ function drawTextBlock(ctx, W, H, o) {
         : base > 0 ? ay + lh
         : ay - blockH + lh;
 
-  const gx = align === "left" ? ax : align === "right" ? ax : ax;
+  const gx = ax;
 
   // title with glow + stroke
   ctx.font = `700 ${ts}px ${font}`;
@@ -235,7 +248,7 @@ function drawBadges(ctx, W, H, o) {
   const gap = fs * 0.5, padX = fs * 0.75, h = fs * 1.9;
   const widths = items.map(p => ctx.measureText(p).width + padX * 2);
   const totalW = widths.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
-  let x = (W - totalW) / 2, y = H - h - Math.round(min(W, H) * 0.035);
+  let x = (W - totalW) / 2, y = H - h - Math.round(Math.min(W, H) * 0.035);
   for (let i = 0; i < items.length; i++) {
     ctx.fillStyle = "rgba(8,8,12,0.66)";
     rrect(ctx, x, y, widths[i], h, h / 2); ctx.fill();
@@ -246,7 +259,6 @@ function drawBadges(ctx, W, H, o) {
     x += widths[i] + gap;
   }
 }
-function min(a, b) { return Math.min(a, b); }
 function rrect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -310,7 +322,7 @@ function render(W, H, opts) {
   drawTextBlock(x, W, H, {
     anchor: state.anchor, title: state.title, tagline: state.tagline, dev: state.dev,
     text: state.textcolor, accent: state.accent, glow: state.glow, glowCol: t.glow,
-    tsize: state.tsize, badges: state.badges,
+    tsize: state.tsize, badges: state.badges, plats: state.plats,
     font: state.font, ls: state.ls, upper: state.upper,
     stroke: state.stroke, strokeCol: state.strokecol,
   });
@@ -363,6 +375,35 @@ function download(canvas, name) {
 function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "game"; }
 
 /* ---------- UI wiring ---------- */
+/* set every control from state — used after restore-from-storage and reset */
+function syncUI() {
+  $("title").value = state.title; $("tagline").value = state.tagline;
+  $("dev").value = state.dev; $("accent").value = state.accent;
+  $("textcolor").value = state.textcolor;
+  $("font").value = state.font; $("anchor").value = state.anchor;
+  $("upper").checked = !!state.upper; $("scan").checked = !!state.scan;
+  $("badges").checked = !!state.badges; $("safe").checked = !!state.safe;
+  $("wm").checked = !!state.wm;
+  const setR = (id, lbl, v, suffix) => {
+    $(id).value = v;
+    $(lbl).textContent = suffix === "px" ? v + "px" : suffix === "auto" ? (v ? v + "px" : "auto") : v + "%";
+  };
+  setR("glow", "glowv", state.glow); setR("vig", "vigv", state.vig);
+  setR("grad", "gradv", state.grad); setR("crop", "cropv", state.crop);
+  setR("ls", "lsv", state.ls); setR("stroke", "strokev", state.stroke);
+  setR("grain", "grainv", state.grain);
+  setR("blur", "blurv", state.blur, "px");
+  setR("tsize", "tsizev", state.tsize, "auto");
+  $("strokecol").value = state.strokecol;
+  document.querySelectorAll("#plats input").forEach((el, i) =>
+    el.checked = state.plats.includes(PLATFORMS[i]));
+  [...$("tpls").children].forEach((el, i) =>
+    el.classList.toggle("on", Object.keys(TEMPLATES)[i] === state.template));
+  [...$("sizes").children].forEach((el, i) =>
+    el.classList.toggle("on", SIZES[i][0] === state.size));
+  markThumb(state.bgIndex);
+}
+
 function init() {
   // template swatches
   const tg = $("tpls");
@@ -423,33 +464,17 @@ function init() {
   // reset art direction to defaults (keeps uploaded images)
   $("reset").onclick = () => {
     Object.assign(state, {
-      template: "ember", font: "block", anchor: "bl",
+      template: "ember", size: "cover", font: "block", anchor: "bl",
       accent: "#ff5c5c", textcolor: "#ffffff",
       glow: 40, vig: 35, grad: 55, tsize: 0, crop: 50,
       ls: 6, upper: true, stroke: 70, strokecol: "#000000",
       grain: 0, blur: 0, safe: false, wm: false, scan: false,
       badges: true, plats: ["Windows", "macOS", "Linux", "Web"],
     });
-    $("font").value = "block"; $("anchor").value = "bl";
-    $("accent").value = "#ff5c5c"; $("textcolor").value = "#ffffff";
-    $("upper").checked = true; $("scan").checked = false;
-    $("badges").checked = true; $("safe").checked = false; $("wm").checked = false;
-    $("glow").value = 40; $("glowv").textContent = "40%";
-    $("vig").value = 35; $("vigv").textContent = "35%";
-    $("grad").value = 55; $("gradv").textContent = "55%";
-    $("crop").value = 50; $("cropv").textContent = "50%";
-    $("ls").value = 6; $("lsv").textContent = "6%";
-    $("stroke").value = 70; $("strokev").textContent = "70%";
-    $("strokecol").value = "#000000";
-    $("grain").value = 0; $("grainv").textContent = "0%";
-    $("blur").value = 0; $("blurv").textContent = "0px";
-    $("tsize").value = 0; $("tsizev").textContent = "auto";
-    document.querySelectorAll("#plats input").forEach((el, i) =>
-      el.checked = state.plats.includes(PLATFORMS[i]));
-    [...$("tpls").children].forEach((el, i) =>
-      el.classList.toggle("on", Object.keys(TEMPLATES)[i] === "ember"));
+    syncUI();
     if (!state.images.length) genSample(true);
     refresh();
+    persist();
   };
 
   // randomize art direction
@@ -460,16 +485,22 @@ function init() {
     state.font = fkeys[(Math.random() * fkeys.length) | 0];
     state.anchor = anchors[(Math.random() * anchors.length) | 0];
     state.accent = "#" + ((Math.random() * 0xffffff) | 0).toString(16).padStart(6, "0");
-    $("accent").value = state.accent; $("anchor").value = state.anchor;
-    fs.value = state.font;
-    [...$("tpls").children].forEach((el, i) => el.classList.toggle("on", keys[i] === state.template));
+    syncUI();
     if (!state.images.length) genSample(true);
     refresh();
+    persist();
   };
 
-  // text inputs
+  // text inputs (title edits re-seed the sample art, debounced)
+  let titleT = null;
   const bind = (id, key) => { $(id).oninput = e => { state[key] = e.target.value; refresh(); }; };
-  bind("title", "title"); bind("tagline", "tagline"); bind("dev", "dev");
+  bind("tagline", "tagline"); bind("dev", "dev");
+  $("title").oninput = e => {
+    state.title = e.target.value;
+    clearTimeout(titleT);
+    titleT = setTimeout(() => { if (state.bgIndex < 0) genSample(true); }, 400);
+    refresh();
+  };
   $("accent").oninput = e => { state.accent = e.target.value; refresh(); };
   $("textcolor").oninput = e => { state.textcolor = e.target.value; refresh(); };
 
@@ -497,15 +528,21 @@ function init() {
   $("blur").oninput = e => { state.blur = +e.target.value; $("blurv").textContent = e.target.value + "px"; refresh(); };
   $("scan").onchange = e => { state.scan = e.target.checked; refresh(); };
 
-  // drop zone
+  // drop zone (with dragleave counter to stop flicker)
   const dz = $("drop"), fi = $("file");
+  let dragDepth = 0;
   dz.onclick = () => fi.click();
   dz.ondragover = e => { e.preventDefault(); dz.classList.add("over"); };
-  dz.ondragleave = () => dz.classList.remove("over");
-  dz.ondrop = e => { e.preventDefault(); dz.classList.remove("over"); loadFiles(e.dataTransfer.files); };
+  dz.ondragenter = e => { e.preventDefault(); dragDepth++; dz.classList.add("over"); };
+  dz.ondragleave = () => { if (--dragDepth <= 0) { dragDepth = 0; dz.classList.remove("over"); } };
+  dz.ondrop = e => { e.preventDefault(); dragDepth = 0; dz.classList.remove("over"); loadFiles(e.dataTransfer.files); };
   fi.onchange = () => loadFiles(fi.files);
+  // dropping a file anywhere else must not navigate away and nuke the session
+  document.addEventListener("dragover", e => e.preventDefault());
+  document.addEventListener("drop", e => e.preventDefault());
 
-  $("sample").onclick = () => genSample(true);
+  addSampleTile();
+  $("sample").onclick = () => { genSample(true); state.bgIndex = -1; markThumb(-1); };
 
   // export
   $("export").onclick = () => {
@@ -519,21 +556,18 @@ function init() {
     }
   };
 
-  // brand persistence
+  // brand persistence — restores state AND syncs every control (P0 fix)
   try {
     const saved = JSON.parse(localStorage.getItem("capsuleforge") || "null");
-    if (saved) {
-      Object.assign(state, saved);
-      $("title").value = state.title; $("tagline").value = state.tagline;
-      $("dev").value = state.dev; $("accent").value = state.accent;
-      $("textcolor").value = state.textcolor;
-    }
+    if (saved) Object.assign(state, saved);
   } catch (e) {}
   const persist = () => {
-    const { title, tagline, dev, accent, textcolor, template, anchor, glow, vig, grad, badges, plats, font, ls, upper, stroke, strokecol, grain, blur, safe, wm } = state;
-    try { localStorage.setItem("capsuleforge", JSON.stringify({ title, tagline, dev, accent, textcolor, template, anchor, glow, vig, grad, badges, plats, font, ls, upper, stroke, strokecol, grain, blur, safe, wm })); } catch (e) {}
+    const { title, tagline, dev, accent, textcolor, template, size, anchor, glow, vig, grad, tsize, crop, badges, plats, font, ls, upper, stroke, strokecol, grain, blur, safe, wm } = state;
+    try { localStorage.setItem("capsuleforge", JSON.stringify({ title, tagline, dev, accent, textcolor, template, size, anchor, glow, vig, grad, tsize, crop, badges, plats, font, ls, upper, stroke, strokecol, grain, blur, safe, wm })); } catch (e) {}
   };
   document.addEventListener("input", persist);
+  document.addEventListener("change", persist);
+  syncUI();
 
   genSample();
   refresh();
@@ -548,30 +582,70 @@ function genSample(force) {
 }
 
 function loadFiles(files) {
-  let pending = files.length;
-  if (!pending) return;
-  [...files].forEach(f => {
+  const imgs = [...files].filter(f => f.type.startsWith("image/"));
+  if (!imgs.length) return;
+  const fi = $("file");
+  let pending = imgs.length;
+  const done = () => { if (--pending === 0) { fi.value = ""; refresh(); } };
+  imgs.forEach(f => {
+    const url = URL.createObjectURL(f);
     const img = new Image();
     img.onload = () => {
       state.images.push(img);
       addThumb(img, state.images.length - 1);
       if (state.images.length === 1) { state.bgIndex = 0; markThumb(0); }
-      if (--pending === 0) refresh();
+      done();
     };
-    img.src = URL.createObjectURL(f);
+    img.onerror = () => { URL.revokeObjectURL(url); done(); }; // corrupt/unsupported → skip, don't stall
+    img.src = url;
   });
 }
 
 function addThumb(img, idx) {
+  const wrap = document.createElement("div");
+  wrap.className = "thumbwrap"; wrap.dataset.idx = idx;
   const t = document.createElement("img");
   t.src = img.src; t.className = "thumb";
+  t.title = "Click to use as background";
   t.onclick = () => { state.bgIndex = idx; markThumb(idx); refresh(); };
-  t.dataset.idx = idx;
-  $("thumbs").appendChild(t);
+  const x = document.createElement("span");
+  x.className = "thumbx"; x.textContent = "×"; x.title = "Remove";
+  x.onclick = (e) => {
+    e.stopPropagation();
+    removeImage(idx);
+  };
+  wrap.appendChild(t); wrap.appendChild(x);
+  $("thumbs").appendChild(wrap);
 }
 function markThumb(idx) {
-  document.querySelectorAll(".thumb").forEach(el =>
+  document.querySelectorAll(".thumbwrap").forEach(el =>
     el.classList.toggle("on", +el.dataset.idx === idx));
+  const st = $("sampletile");
+  if (st) st.classList.toggle("on", idx === -1);
+}
+/* sample-art tile: lets the user switch back to generated art after uploading */
+function addSampleTile() {
+  if ($("sampletile")) return;
+  const d = document.createElement("div");
+  d.className = "thumbwrap on"; d.id = "sampletile"; d.dataset.idx = "-1";
+  d.title = "Use generated sample art";
+  d.innerHTML = `<div class="thumbsample">✦</div>`;
+  d.onclick = () => { state.bgIndex = -1; markThumb(-1); refresh(); };
+  $("thumbs").prepend(d);
+}
+function removeImage(idx) {
+  const img = state.images[idx];
+  if (!img) return;
+  URL.revokeObjectURL(img.src);
+  state.images.splice(idx, 1);
+  // rebuild thumbs (indexes shifted)
+  $("thumbs").innerHTML = "";
+  addSampleTile();
+  state.images.forEach((im, i) => addThumb(im, i));
+  if (state.bgIndex === idx) state.bgIndex = state.images.length ? 0 : -1;
+  else if (state.bgIndex > idx) state.bgIndex--;
+  markThumb(state.bgIndex);
+  refresh();
 }
 
 // ---------- touch sliders ----------
@@ -613,4 +687,4 @@ initTouchSliders();
 
 init();
 /* test hook */
-window.__cf = { state, render, SIZES, TEMPLATES, refresh };
+window.__cf = { state, render, SIZES, TEMPLATES, FONTS, PLATFORMS, CONFIG, ITCH_URL, syncUI, refresh, hexA, drawCover };

@@ -43,10 +43,25 @@ browsers; use it on a phone to iterate on key art from your camera roll.
 
 - `index.html` — UI shell (self-contained)
 - `studio.js` — compositing engine (vanilla canvas, no deps)
+- `LICENSE` — commercial license (what the $4 buys)
+- `android/` — WebView wrapper app (APK for the itch.io android channel)
+- `marketing/butler-push.sh` — release pipeline: rebuilds zips, pushes via butler
+- `marketing/capsuleforge-full.zip` — paid download (rebuilt from source by the script)
+- `marketing/capsuleforge-itch-demo.zip` — free web demo (batch export UI-gated)
 - `samples/` — six template renders (what the tool produces out of the box)
 - `showcase.png` — all six templates side by side
 
+## Before you publish
+
+1. Set your itch.io username: `export ITCH_USER=yourname` (or edit `CONFIG.ITCH_USER`
+   in `studio.js`). The `skitworks` placeholder does not resolve.
+2. In `index.html`, replace `OG_IMAGE_URL` with the absolute https URL of your
+   hosted `marketing/ember-OG-Twitter_card_1200×630.png` so link shares render a card.
+3. Run `marketing/butler-push.sh` to rebuild the zips and push to itch.io.
+4. Build the APK (`android/README.md`) if you want the android channel.
+
 ## License
 
-Yours. Ship assets you make with it anywhere. Redistribute the tool with your
-game's branding if you like.
+Paid tool, $4 minimum (pay what you want). **Everything you generate with it is
+100% yours** — use it anywhere, no attribution, no royalties. The tool files
+themselves may not be redistributed. See `LICENSE` for the full plain-English terms.

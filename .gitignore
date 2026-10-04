@@ -1,0 +1,9 @@
+# Android build outputs
+android/.gradle/
+android/app/build/
+android/app/src/main/assets/
+*.apk
+
+# OS / editor
+.DS_Store
+Thumbs.db

@@ -1,0 +1,19 @@
+// Top-level build file — CapsuleForge Android wrapper.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Pinned: must exist on Maven Central (do NOT use a made-up coordinate).
+        classpath 'com.android.tools.build:gradle:8.5.2'
+    }
+}
+
+allprojects {
+    // repositories are declared in settings.gradle (FAIL_ON_PROJECT_REPOS)
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.buildDir
+}
