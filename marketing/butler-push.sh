@@ -21,7 +21,7 @@ set -euo pipefail
 
 ITCH_USER="${ITCH_USER:-SkiticusPrime}"   # <-- your itch.io username (or export ITCH_USER)
 PROJECT="$ITCH_USER/capsuleforge"
-VERSION="1.1.0"
+VERSION="1.2.0"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/.." && pwd)"
 OUT="$DIR"

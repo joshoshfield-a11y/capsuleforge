@@ -92,6 +92,15 @@
   #drop.over { border-color: var(--acc); color: var(--txt); }
   .val { color: var(--acc2); font-size: 10px; }
 
+  /* ---- contact-sheet modal ---- */
+  #sheetmodal { position: fixed; inset: 0; z-index: 50; background: rgba(4,4,8,.88);
+                overflow: auto; padding: 28px 18px; }
+  #sheetbox { max-width: 1180px; margin: 0 auto; background: var(--panel);
+              border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  #sheethold { overflow: auto; max-height: 76vh; border: 1px solid var(--line);
+               border-radius: 6px; background: #0b0b11; }
+  #sheetcanvas { display: block; }
+
   /* ---- Mobile / touch ---- */
   button, .tpl, .thumb, #drop { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   @media (max-width: 860px) {
@@ -240,12 +249,27 @@
       <button class="primary" id="export" style="width:100%">⬇ DOWNLOAD PNG</button>
       <div style="height:6px"></div>
       <button id="exportall" style="width:100%">⬇⬇ Export every size (itch.io + Steam)</button>
+      <div style="height:6px"></div>
+      <button id="contactsheet" style="width:100%">▦ Contact sheet — preview every size</button>
       <div class="hint">All rendering happens in your browser. Nothing is uploaded, ever.</div>
     </div>
 
   </div>
   <div id="preview-wrap"><canvas id="preview" width="630" height="500"></canvas></div>
 </main>
+<!-- contact-sheet modal -->
+<div id="sheetmodal" hidden>
+  <div id="sheetbox">
+    <div class="row" style="margin-bottom:10px">
+      <b style="font-size:13px">▦ Contact sheet — every export size</b>
+      <span style="flex:1"></span>
+      <button id="sheetdl" class="primary" style="flex:0 0 auto">⬇ Download sheet</button>
+      <button id="sheetclose" style="flex:0 0 auto">✕ Close</button>
+    </div>
+    <div id="sheethold"><canvas id="sheetcanvas"></canvas></div>
+    <div class="hint">Rendered live from your current design — same crop, text and effects at every size. Click outside or press Esc to close.</div>
+  </div>
+</div>
 <script src="studio.js"></script>
 </body>
 </html>

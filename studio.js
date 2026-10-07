@@ -7,7 +7,7 @@
 const CONFIG = {
   ITCH_USER: "SkiticusPrime",
   PROJECT_SLUG: "capsuleforge",
-  VERSION: "1.1.0",
+  VERSION: "1.2.0",
 };
 const ITCH_URL = `https://${CONFIG.ITCH_USER}.itch.io/${CONFIG.PROJECT_SLUG}`;
 
@@ -387,6 +387,38 @@ function download(canvas, name) {
 }
 function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "game"; }
 
+/* ---------- contact sheet ---------- */
+/* One live preview of the current design at every export size, so a crop
+ * that beheads the hero art on the thumbnail is visible before exporting. */
+function showContactSheet() {
+  const CELL_W = 300, CELL_H = 240, LABEL_H = 26, GAP = 18, COLS = 3;
+  const cells = SIZES.map(([id, W, H, name]) => {
+    const s = Math.min(1, CELL_W / W, CELL_H / H);
+    return { id, W, H, name, w: Math.round(W * s), h: Math.round(H * s), img: render(W, H) };
+  });
+  const rows = Math.ceil(cells.length / COLS);
+  const sheet = $("sheetcanvas");
+  sheet.width = COLS * (CELL_W + GAP) + GAP;
+  sheet.height = rows * (CELL_H + LABEL_H + GAP) + GAP;
+  const x = sheet.getContext("2d");
+  x.fillStyle = "#0b0b11"; x.fillRect(0, 0, sheet.width, sheet.height);
+  cells.forEach((c, i) => {
+    const cx = GAP + (i % COLS) * (CELL_W + GAP);
+    const cy = GAP + Math.floor(i / COLS) * (CELL_H + LABEL_H + GAP);
+    // checkerboard so transparency/letterboxing reads honestly
+    x.fillStyle = "#14141c"; x.fillRect(cx, cy, CELL_W, CELL_H);
+    x.drawImage(c.img, cx + (CELL_W - c.w) / 2, cy + (CELL_H - c.h) / 2, c.w, c.h);
+    x.strokeStyle = "#2b2b3d"; x.lineWidth = 1;
+    x.strokeRect(cx + .5, cy + .5, CELL_W - 1, CELL_H - 1);
+    x.fillStyle = "#9a9ab0"; x.font = "11px ui-monospace, Menlo, monospace";
+    x.textAlign = "center"; x.textBaseline = "top";
+    x.fillText(`${c.name} — ${c.W}×${c.H}`, cx + CELL_W / 2, cy + CELL_H + 6);
+  });
+  window.__sheetCanvas = sheet;
+  $("sheetmodal").hidden = false;
+}
+function closeContactSheet() { $("sheetmodal").hidden = true; }
+
 /* ---------- UI wiring ---------- */
 /* set every control from state — used after restore-from-storage and reset */
 function syncUI() {
@@ -569,6 +601,18 @@ function init() {
       await new Promise(r => setTimeout(r, 350)); // let the browser breathe between downloads
     }
   };
+
+  // contact sheet — preview every size at once
+  $("contactsheet").onclick = showContactSheet;
+  $("sheetclose").onclick = closeContactSheet;
+  $("sheetdl").onclick = () =>
+    download(window.__sheetCanvas, `${slug(state.title)}-contact-sheet.png`);
+  $("sheetmodal").addEventListener("click", e => {
+    if (e.target === $("sheetmodal")) closeContactSheet();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !$("sheetmodal").hidden) closeContactSheet();
+  });
 
   // brand persistence — restores state AND syncs every control (P0 fix)
   try {
