@@ -21,7 +21,7 @@ set -euo pipefail
 
 ITCH_USER="${ITCH_USER:-SkiticusPrime}"   # <-- your itch.io username (or export ITCH_USER)
 PROJECT="$ITCH_USER/capsuleforge"
-VERSION="1.3.0"
+VERSION="1.3.1"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/.." && pwd)"
 OUT="$DIR"
@@ -53,10 +53,15 @@ python3 - "$TMP/index.html" "$UPSELL" <<'EOF'
 import sys
 p, url = sys.argv[1], sys.argv[2]
 s = open(p).read()
-old = '<button id="exportall" style="width:100%">⬇⬇ Export every size</button>'
-new = f'<button style="width:100%" onclick="window.open(\'{url}\',\'_blank\')">⬆ Get batch export + Steam sizes — full version</button>'
-assert old in s, "exportall button markup changed — update this script"
-open(p, "w").write(s.replace(old, new))
+upsell = f'<button style="width:100%" onclick="window.open(\'{url}\',\'_blank\')">⬆ Get batch export + Steam sizes — full version</button>'
+olds = [
+  '<button id="exportall" style="width:100%">⬇⬇ Export every size</button>',
+  '<button id="exportzip" style="width:100%">🗜 Export all as .zip</button>',
+]
+for old in olds:
+    assert old in s, f"batch-export button markup changed ({old!r}) — update this script"
+    s = s.replace(old, upsell if old == olds[0] else "")
+open(p, "w").write(s)
 EOF
 # Strip the Steam preset pack from the demo's studio.js (paid-tier gating).
 # UI-level only, same as the batch-export upsell above: the demo build simply

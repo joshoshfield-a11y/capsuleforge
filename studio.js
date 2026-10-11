@@ -7,7 +7,7 @@
 const CONFIG = {
   ITCH_USER: "SkiticusPrime",
   PROJECT_SLUG: "capsuleforge",
-  VERSION: "1.3.0",
+  VERSION: "1.3.1",
 };
 const ITCH_URL = `https://${CONFIG.ITCH_USER}.itch.io/${CONFIG.PROJECT_SLUG}`;
 
@@ -562,6 +562,64 @@ function download(canvas, name, forcePng) {
 }
 function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "game"; }
 
+/* ---------- minimal ZIP writer (stored entries, no compression) ----------
+ * Batch export fires a dozen separate downloads, which browsers love to block.
+ * One zip, no dependencies, works offline. */
+function crc32(bytes) {
+  let t = crc32.table;
+  if (!t) {
+    t = crc32.table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c;
+    }
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = t[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function zipConcat(parts) {
+  const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+function dataURLToBytes(dataURL) {
+  const bin = atob(dataURL.split(",")[1]);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function buildZip(entries) {
+  const enc = new TextEncoder();
+  const d4 = n => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n >>> 0, true); return b; };
+  const d2 = n => { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, n & 0xFFFF, true); return b; };
+  const body = [], central = [];
+  let offset = 0;
+  for (const { name, data } of entries) {
+    const nb = enc.encode(name);
+    const crc = crc32(data);
+    const lh = zipConcat([d4(0x04034b50), d2(20), d2(0), d2(0), d2(0), d2(0),
+      d4(crc), d4(data.length), d4(data.length), d2(nb.length), d2(0), nb, data]);
+    body.push(lh);
+    central.push(zipConcat([d4(0x02014b50), d2(20), d2(20), d2(0), d2(0), d2(0), d2(0),
+      d4(crc), d4(data.length), d4(data.length),
+      d2(nb.length), d2(0), d2(0), d2(0), d2(0), d4(0), d4(offset), nb]));
+    offset += lh.length;
+  }
+  const cd = zipConcat(central);
+  const end = zipConcat([d4(0x06054b50), d2(0), d2(0),
+    d2(entries.length), d2(entries.length), d4(cd.length), d4(offset), d2(0)]);
+  return new Blob([zipConcat([...body, cd, end])], { type: "application/zip" });
+}
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.download = name; a.href = url; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 8000);
+}
+
 /* ---------- contact sheet ---------- */
 /* One live preview of the current design at every export size, so a crop
  * that beheads the hero art on the thumbnail is visible before exporting. */
@@ -852,6 +910,18 @@ function init() {
       await new Promise(r => setTimeout(r, 350)); // let the browser breathe between downloads
     }
   };
+  // zip export: one file instead of a download volley (also swapped in the demo)
+  if ($("exportzip")) $("exportzip").onclick = async () => {
+    const fmt = state.format === "jpg" ? "jpg" : "png";
+    const entries = [];
+    for (const [id, W, H] of SIZES) {
+      const url = render(W, H).toDataURL(fmt === "jpg" ? "image/jpeg" : "image/png",
+        fmt === "jpg" ? state.jpgq / 100 : undefined);
+      entries.push({ name: `${slug(state.title)}-${id}-${W}x${H}.${fmt}`, data: dataURLToBytes(url) });
+      await new Promise(r => setTimeout(r, 0)); // keep the UI alive on big sets
+    }
+    downloadBlob(buildZip(entries), `${slug(state.title)}-assets.zip`);
+  };
 
   // contact sheet — preview every size at once
   $("contactsheet").onclick = showContactSheet;
@@ -996,4 +1066,4 @@ initTouchSliders();
 
 init();
 /* test hook */
-window.__cf = { state, render, SIZES, TEMPLATES, FONTS, PLATFORMS, CONFIG, ITCH_URL, PRESETS, SAMPLE_STYLES, syncUI, refresh, hexA, drawCover, extractPalette, seedFrom, makeSampleArt };
+window.__cf = { state, render, SIZES, TEMPLATES, FONTS, PLATFORMS, CONFIG, ITCH_URL, PRESETS, SAMPLE_STYLES, syncUI, refresh, hexA, drawCover, extractPalette, seedFrom, makeSampleArt, buildZip, dataURLToBytes, crc32 };
