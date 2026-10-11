@@ -7,7 +7,7 @@
 const CONFIG = {
   ITCH_USER: "SkiticusPrime",
   PROJECT_SLUG: "capsuleforge",
-  VERSION: "1.3.1",
+  VERSION: "1.3.2",
 };
 const ITCH_URL = `https://${CONFIG.ITCH_USER}.itch.io/${CONFIG.PROJECT_SLUG}`;
 
@@ -19,6 +19,10 @@ const TEMPLATES = {
   gold:   { name: "Gold",   g: ["#3a2a08", "#120c04"], glow: "#ffc857", grad: "vertical" },
   mono:   { name: "Mono",   g: ["#23232b", "#0c0c10"], glow: "#c8c8d8", grad: "vertical" },
   toxic:  { name: "Toxic",  g: ["#12290f", "#060f05"], glow: "#7dff5c", grad: "vertical" },
+  /* Marquee: split layout — the title gets its own panel, the art keeps a
+   * protected focal area that text can never cover. (Thanks, u/investigatormaker.) */
+  marquee: { name: "Marquee", g: ["#1e1b22", "#0c0b0e"], glow: "#ffc857", grad: "vertical",
+             split: { side: "left", ratio: 0.40 } },
 };
 const ITCH_SIZES = [
   ["cover",   630,  500,  "itch cover"],
@@ -128,6 +132,20 @@ function drawCover(ctx, img, W, H, crop, blur) {
   if (blur > 0 && "filter" in ctx) ctx.filter = `blur(${blur}px)`;
   ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
   if (blur > 0 && "filter" in ctx) ctx.filter = "none";
+}
+
+/* cover-draw an image into an arbitrary sub-rect (for split layouts) */
+function drawCoverRect(ctx, img, rx, ry, rw, rh, crop, blur) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+  const iw = img.width, ih = img.height;
+  const base = Math.max(rw / iw, rh / ih);
+  const zoom = base * (1 + (crop / 100) * 0.6);
+  const dw = iw * zoom, dh = ih * zoom;
+  if (blur > 0 && "filter" in ctx) ctx.filter = `blur(${blur}px)`;
+  ctx.drawImage(img, rx + (rw - dw) / 2, ry + (rh - dh) / 2, dw, dh);
+  if (blur > 0 && "filter" in ctx) ctx.filter = "none";
+  ctx.restore();
 }
 
 /* ---------- sample key-art generator ----------
@@ -470,9 +488,18 @@ function render(W, H, opts) {
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
   const x = c.getContext("2d");
-
-  // 1. background
   const src = state.bgIndex >= 0 ? state.images[state.bgIndex] : state.sample;
+
+  if (t.split) renderSplit(x, W, H, t, src);
+  else renderFull(x, W, H, t, src);
+
+  finishRender(x, W, H, opts);
+  return c;
+}
+
+/* classic full-bleed layout: art everywhere, text overlaid */
+function renderFull(x, W, H, t, src) {
+  // 1. background
   if (src) drawCover(x, src, W, H, state.crop, state.blur);
   else {
     const g = x.createLinearGradient(0, 0, 0, H);
@@ -515,7 +542,11 @@ function render(W, H, opts) {
   // 6. badges
   drawBadges(x, W, H, { badges: state.badges, plats: state.plats, accent: state.accent, text: state.textcolor });
 
-  // 7. optional watermark (on by default when toggled; burned into exports)
+}
+
+/* watermark + safe-area guide — shared by both layouts */
+function finishRender(x, W, H, opts) {
+  // 7. optional watermark (burned into exports)
   if ((!opts || opts.wm !== false) && state.wm) {
     const wf = Math.round(Math.min(W, H) * 0.024);
     x.font = `${wf}px ui-monospace, Menlo, monospace`;
@@ -533,8 +564,61 @@ function render(W, H, opts) {
     x.strokeRect(gx, gy, W - gx * 2, H - gy * 2);
     x.restore();
   }
+}
 
-  return c;
+/* split layout: title panel on the left, art in a protected focal area right.
+ * Text can never cover the art, at any export size. */
+function renderSplit(x, W, H, t, src) {
+  const pw = Math.round(W * (t.split.ratio || 0.40));
+  const aw = W - pw;
+
+  // 1. art, cover-fit into the protected zone only
+  if (src) drawCoverRect(x, src, pw, 0, aw, H, state.crop, state.blur);
+  else {
+    const g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, t.g[0]); g.addColorStop(1, t.g[1]);
+    x.save(); x.beginPath(); x.rect(pw, 0, aw, H); x.clip();
+    x.fillStyle = g; x.fillRect(pw, 0, aw, H); x.restore();
+  }
+
+  // 2. vignette + scanlines, clipped to the art zone
+  x.save(); x.beginPath(); x.rect(pw, 0, aw, H); x.clip();
+  if (state.vig > 0) {
+    const v = x.createRadialGradient(pw + aw / 2, H / 2, Math.min(aw, H) * 0.42,
+                                     pw + aw / 2, H / 2, Math.max(aw, H) * 0.75);
+    v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, `rgba(0,0,0,${state.vig / 100})`);
+    x.fillStyle = v; x.fillRect(pw, 0, aw, H);
+  }
+  if (state.scan) {
+    x.fillStyle = "rgba(0,0,0,0.16)";
+    for (let y = 0; y < H; y += 4) x.fillRect(pw, y, aw, 1);
+  }
+  x.restore();
+  grainLayer(x, W, H, state.grain / 100 * 0.5, 1234);
+
+  // 3. title panel
+  const pg = x.createLinearGradient(0, 0, 0, H);
+  pg.addColorStop(0, t.g[0]); pg.addColorStop(1, t.g[1]);
+  x.fillStyle = pg; x.fillRect(0, 0, pw, H);
+  // accent divider between panel and art
+  const dw = Math.max(2, Math.round(W * 0.005));
+  x.fillStyle = state.accent;
+  x.fillRect(pw - dw, 0, dw, H);
+
+  // 4. text lives in the panel — badges: false (they go in the art zone)
+  drawTextBlock(x, pw, H, {
+    anchor: state.anchor, title: state.title, tagline: state.tagline, dev: state.dev,
+    text: state.textcolor, accent: state.accent, glow: state.glow, glowCol: t.glow,
+    tsize: state.tsize, badges: false, plats: state.plats,
+    font: state.font, ls: state.ls, upper: state.upper,
+    stroke: state.stroke, strokeCol: state.strokecol,
+    hardshadow: state.hardshadow, underline: state.underline,
+  });
+
+  // 5. badges along the bottom of the art zone
+  x.save(); x.translate(pw, 0);
+  drawBadges(x, aw, H, { badges: state.badges, plats: state.plats, accent: state.accent, text: state.textcolor });
+  x.restore();
 }
 
 /* ---------- preview ---------- */
