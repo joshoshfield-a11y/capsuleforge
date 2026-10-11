@@ -7,7 +7,7 @@
 const CONFIG = {
   ITCH_USER: "SkiticusPrime",
   PROJECT_SLUG: "capsuleforge",
-  VERSION: "1.2.0",
+  VERSION: "1.3.0",
 };
 const ITCH_URL = `https://${CONFIG.ITCH_USER}.itch.io/${CONFIG.PROJECT_SLUG}`;
 
@@ -61,15 +61,51 @@ const FONTS = {
 
 const state = {
   template: "ember", size: "cover", anchor: "bl",
-  images: [], bgIndex: -1, sample: null,
-  title: "HALCYON EXPANSE",
-  tagline: "A hand-drawn journey through the ruin belt",
-  dev: "", accent: "#ff5c5c", textcolor: "#ffffff",
+  images: [], bgIndex: -1, sample: null, sampleStyle: "screenprint",
+  title: "BONE ORCHARD",
+  tagline: "a slow-burn folk horror about what grows back",
+  dev: "", accent: "#ff6b4a", textcolor: "#ffffff",
   glow: 40, vig: 35, grad: 55, tsize: 0, crop: 50,
   font: "block", ls: 6, upper: true, stroke: 70, strokecol: "#000000", grain: 0, blur: 0,
+  hardshadow: false, underline: false,
+  format: "png", jpgq: 90,
   safe: false, wm: false,
   badges: true, scan: false, plats: ["Windows", "macOS", "Linux", "Web"],
 };
+
+/* ---------- curated art-direction presets ----------
+ * One click sets template, type, layout and finish together. These are
+ * hand-tuned starting points, not random combos. */
+const PRESETS = {
+  arcade: { label: "Arcade Cabinet", desc: "chunky pixel type, scanlines, hard shadow",
+    apply: { template: "mono", font: "pixel", anchor: "cc", accent: "#7dff5c",
+      textcolor: "#ffffff", glow: 30, vig: 40, grad: 50, grain: 12, scan: true,
+      stroke: 90, strokecol: "#000000", ls: 4, upper: true,
+      hardshadow: true, underline: false } },
+  zine: { label: "Zine Cut", desc: "marker type, heavy grain, rough and loud",
+    apply: { template: "ember", font: "marker", anchor: "bl", accent: "#ff6b4a",
+      textcolor: "#fff7ee", glow: 25, vig: 45, grad: 45, grain: 45, scan: false,
+      stroke: 60, strokecol: "#1a0b0b", ls: 2, upper: true,
+      hardshadow: true, underline: false } },
+  vhs: { label: "VHS Rental", desc: "soft glow, tracking lines, warm bleed",
+    apply: { template: "ocean", font: "bebas", anchor: "bc", accent: "#41c7ff",
+      textcolor: "#ffffff", glow: 55, vig: 35, grad: 55, grain: 22, scan: true,
+      stroke: 70, strokecol: "#000000", ls: 10, upper: true,
+      hardshadow: false, underline: false } },
+  print: { label: "Screen Print", desc: "flat color, quiet glow, accent rule",
+    apply: { template: "gold", font: "clean", anchor: "cl", accent: "#ffc857",
+      textcolor: "#ffffff", glow: 15, vig: 30, grad: 50, grain: 12, scan: false,
+      stroke: 50, strokecol: "#000000", ls: 8, upper: true,
+      hardshadow: false, underline: true } },
+  matinee: { label: "Midnight Matinee", desc: "tall serif, big glow, dead center",
+    apply: { template: "violet", font: "cinzel", anchor: "cc", accent: "#b06bff",
+      textcolor: "#f5efff", glow: 70, vig: 40, grad: 65, grain: 8, scan: false,
+      stroke: 60, strokecol: "#000000", ls: 12, upper: true,
+      hardshadow: false, underline: false } },
+};
+/* accents the "Surprise me" dice is allowed to roll — no muddy randoms */
+const CURATED_ACCENTS = ["#ff6b4a", "#41c7ff", "#b06bff", "#ffc857", "#7dff5c",
+  "#ff8c42", "#4ae3b5", "#ff5c8c", "#6ee7ff", "#ffd166", "#e8e8f0", "#c084fc"];
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -94,7 +130,15 @@ function drawCover(ctx, img, W, H, crop, blur) {
   if (blur > 0 && "filter" in ctx) ctx.filter = "none";
 }
 
-/* ---------- sample key-art generator (seeded, template-tinted) ---------- */
+/* ---------- sample key-art generator ----------
+ * Three hand-printed looks, seeded by title + template. Deliberately none of
+ * the usual procedural clichés (no starfields, no ringed planets). */
+const SAMPLE_STYLES = [
+  ["screenprint", "Screenprint"],
+  ["halftone", "Halftone"],
+  ["grainfield", "Grainfield"],
+];
+
 function mulberry(seed) {
   return () => {
     seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
@@ -104,61 +148,134 @@ function mulberry(seed) {
   };
 }
 
-function makeSampleArt(W, H, accent, seed) {
+function seedFrom(title, style) {
+  let h = 7;
+  for (const c of style + "|" + title) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return h;
+}
+
+/* multiply a hex color toward black — flat print shading */
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, (((n >> 16) & 255) * f) | 0);
+  const g = Math.min(255, (((n >> 8) & 255) * f) | 0);
+  const b = Math.min(255, (((n & 255) * f) | 0));
+  return `rgb(${r},${g},${b})`;
+}
+
+/* shared film-grain layer (also used by render()) */
+function grainLayer(x, W, H, alpha, seed) {
+  if (alpha <= 0) return;
+  const nz = document.createElement("canvas");
+  const ns = 3; // 1/3-res noise, tiled up
+  nz.width = Math.ceil(W / ns); nz.height = Math.ceil(H / ns);
+  const nx = nz.getContext("2d");
+  const id = nx.createImageData(nz.width, nz.height);
+  const rnd = mulberry(seed);
+  for (let i = 0; i < id.data.length; i += 4) {
+    const v = (rnd() * 255) | 0;
+    id.data[i] = id.data[i+1] = id.data[i+2] = v; id.data[i+3] = 255;
+  }
+  nx.putImageData(id, 0, 0);
+  x.save(); x.globalAlpha = alpha; x.globalCompositeOperation = "overlay";
+  x.drawImage(nz, 0, 0, W, H); x.restore();
+}
+
+function artScreenprint(x, W, H, rnd, ink, paper, pale) {
+  x.fillStyle = paper; x.fillRect(0, 0, W, H);
+  const mis = Math.max(2, W / 320); // misregistration offset — the print-shop tell
+  // sun: pale ghost printed first, ink pulled slightly off-register
+  const sx = W * (0.58 + rnd() * 0.22), sy = H * (0.26 + rnd() * 0.16);
+  const sr = Math.min(W, H) * (0.24 + rnd() * 0.10);
+  x.fillStyle = hexA(pale, 0.28);
+  x.beginPath(); x.arc(sx + mis, sy + mis, sr, 0, Math.PI * 2); x.fill();
+  x.fillStyle = hexA(ink, 0.88);
+  x.beginPath(); x.arc(sx, sy, sr, 0, Math.PI * 2); x.fill();
+  // horizon band in dark ink
+  const hy = H * (0.60 + rnd() * 0.12);
+  x.fillStyle = shade(ink, 0.22);
+  x.fillRect(0, hy, W, H - hy);
+  // thin pale rules floating above the horizon
+  x.fillStyle = hexA(pale, 0.75);
+  const bars = 2 + ((rnd() * 2) | 0);
+  for (let i = 0; i < bars; i++) {
+    const by = hy - H * (0.06 + i * 0.055 + rnd() * 0.02);
+    x.fillRect(W * (0.08 + rnd() * 0.3), by, W * (0.15 + rnd() * 0.35), Math.max(2, H * 0.012));
+  }
+  // small registration square, bottom-left
+  const q = Math.min(W, H) * 0.05;
+  x.fillStyle = hexA(pale, 0.35);
+  x.fillRect(W * 0.10 + mis, H * 0.78 + mis, q, q);
+  x.fillStyle = hexA(ink, 0.9);
+  x.fillRect(W * 0.10, H * 0.78, q, q);
+  grainLayer(x, W, H, 0.16, 99);
+}
+
+function artHalftone(x, W, H, rnd, ink, paper, pale) {
+  x.fillStyle = paper; x.fillRect(0, 0, W, H);
+  const s = Math.max(7, W / 88);
+  const cx = W * (0.68 + rnd() * 0.12), cy = H * (0.32 + rnd() * 0.12);
+  const cr = Math.min(W, H) * 0.30;
+  // dot field, density riding a diagonal wave, clean around the sun
+  x.fillStyle = hexA(ink, 0.9);
+  for (let gy = s / 2; gy < H; gy += s) {
+    for (let gx = s / 2; gx < W; gx += s) {
+      if (Math.hypot(gx - cx, gy - cy) < cr) continue;
+      const wave = 0.5 + 0.5 * Math.sin((gx / W + gy / H) * Math.PI * 3);
+      const r = s * 0.42 * (0.25 + 0.75 * wave);
+      if (r < 0.6) continue;
+      x.beginPath(); x.arc(gx, gy, r, 0, Math.PI * 2); x.fill();
+    }
+  }
+  // printed sun: pale disc, ink ring, sparse dots inside
+  x.fillStyle = hexA(pale, 0.92);
+  x.beginPath(); x.arc(cx, cy, cr, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = hexA(ink, 0.9); x.lineWidth = Math.max(2, W / 300);
+  x.beginPath(); x.arc(cx, cy, cr, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = hexA(ink, 0.5);
+  for (let i = 0; i < 60; i++) {
+    const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * cr * 0.9;
+    x.beginPath(); x.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, s * 0.16, 0, Math.PI * 2); x.fill();
+  }
+  // flat bars along the bottom
+  x.fillStyle = shade(ink, 0.25);
+  x.fillRect(0, H * 0.86, W, H * 0.14);
+  x.fillStyle = hexA(ink, 0.85);
+  x.fillRect(0, H * 0.84, W, Math.max(2, H * 0.012));
+  grainLayer(x, W, H, 0.10, 4242);
+}
+
+function artGrainfield(x, W, H, rnd, ink, paper, pale) {
+  x.fillStyle = shade(paper, 1.15); x.fillRect(0, 0, W, H);
+  // stacked bands with hand-wavy top edges
+  const bands = 5 + ((rnd() * 3) | 0);
+  for (let b = 0; b < bands; b++) {
+    const y0 = H * (0.30 + (b / bands) * 0.62);
+    x.fillStyle = b % 2 ? hexA(ink, 0.16 + rnd() * 0.10) : shade(paper, 0.9);
+    x.beginPath(); x.moveTo(0, H); x.lineTo(0, y0);
+    for (let px = 0; px <= W; px += W / 16)
+      x.lineTo(px, y0 + (rnd() - 0.5) * H * 0.03);
+    x.lineTo(W, H); x.closePath(); x.fill();
+  }
+  // hard sun disc sitting on the horizon — print, not render
+  const hy = H * 0.62;
+  const sr = Math.min(W, H) * (0.13 + rnd() * 0.05);
+  const sx = W * (0.30 + rnd() * 0.4);
+  x.fillStyle = hexA(ink, 0.95);
+  x.beginPath(); x.arc(sx, hy - sr * 0.25, sr, 0, Math.PI * 2); x.fill();
+  x.fillStyle = hexA(pale, 0.8);
+  x.fillRect(0, hy, W, Math.max(2, H * 0.006));
+  grainLayer(x, W, H, 0.22, 777);
+}
+
+function makeSampleArt(W, H, ink, paper, seed, style) {
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
   const x = c.getContext("2d");
   const rnd = mulberry(seed);
-  const an = parseInt(accent.slice(1), 16);
-  const ar = (an >> 16) & 255, ag = (an >> 8) & 255, ab = an & 255;
-
-  // sky
-  const sky = x.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, "#0a0c18"); sky.addColorStop(1, hexA(accent, 0.28));
-  x.fillStyle = sky; x.fillRect(0, 0, W, H);
-
-  // stars
-  x.fillStyle = "#fff";
-  for (let i = 0; i < 140; i++) {
-    x.globalAlpha = 0.12 + rnd() * 0.7;
-    const s = rnd() < 0.92 ? 1 : 2;
-    x.fillRect(rnd() * W, rnd() * H * 0.7, s, s);
-  }
-  x.globalAlpha = 1;
-
-  // planet / moon
-  const px = W * (0.6 + rnd() * 0.25), py = H * (0.2 + rnd() * 0.2), pr = Math.min(W, H) * 0.22;
-  const pg = x.createRadialGradient(px - pr * 0.4, py - pr * 0.4, pr * 0.1, px, py, pr);
-  pg.addColorStop(0, hexA(accent, 0.95)); pg.addColorStop(1, hexA(accent, 0.05));
-  x.fillStyle = pg;
-  x.beginPath(); x.arc(px, py, pr, 0, 7); x.fill();
-  x.strokeStyle = hexA(accent, 0.5); x.lineWidth = Math.max(1, W / 400);
-  x.beginPath(); x.ellipse(px, py, pr * 1.5, pr * 0.45, -0.4, 0, 7); x.stroke();
-
-  // ridge layers
-  const layers = 4;
-  for (let L = 0; L < layers; L++) {
-    const t = L / (layers - 1);
-    const baseY = H * lerp(0.55, 1.02, t);
-    x.fillStyle = `rgba(${lerp(ar, 6, t) | 0},${lerp(ag, 8, t) | 0},${lerp(ab, 14, t) | 0},${lerp(0.5, 1, t)})`;
-    x.beginPath(); x.moveTo(0, H);
-    let y = baseY;
-    for (let px2 = 0; px2 <= W; px2 += W / 24) {
-      y = baseY + (rnd() - 0.5) * H * 0.16 * (1 - t * 0.5);
-      x.lineTo(px2, y);
-    }
-    x.lineTo(W, H); x.closePath(); x.fill();
-  }
-
-  // accent spire
-  x.fillStyle = hexA(accent, 0.9);
-  const sx = W * (0.15 + rnd() * 0.25), sw = W * 0.012, sh = H * (0.3 + rnd() * 0.2);
-  x.beginPath();
-  x.moveTo(sx, H * 0.78); x.lineTo(sx + sw, H * 0.78);
-  x.lineTo(sx + sw / 2, H * 0.78 - sh); x.closePath(); x.fill();
-  x.fillStyle = hexA(accent, 0.25);
-  x.beginPath(); x.arc(sx + sw / 2, H * 0.78 - sh, sw * 3.2, 0, 7); x.fill();
-
+  const pale = "#f2ede4";
+  const painters = { screenprint: artScreenprint, halftone: artHalftone, grainfield: artGrainfield };
+  (painters[style] || artScreenprint)(x, W, H, rnd, ink, paper, pale);
   return c;
 }
 
@@ -171,9 +288,12 @@ function anchorPoint(a, W, H, pad) {
 
 function drawTextBlock(ctx, W, H, o) {
   const pad = Math.round(Math.min(W, H) * 0.055);
-  // when badges are actually drawn, lift bottom-anchored text so rows don't collide
+  // bottom-anchored text must clear the badge row: its real height + breathing room
   const badgesDrawn = o.badges && o.plats && o.plats.length > 0;
-  const lift = badgesDrawn ? Math.round(Math.min(W, H) * 0.105) : 0;
+  const minWH = Math.min(W, H);
+  const lift = (o.anchor[0] === "b" && badgesDrawn)
+    ? Math.round(minWH * (0.036 * 1.9 + 0.035)) + Math.round(minWH * 0.028)
+    : 0;
   const [ax0, ay0] = anchorPoint(o.anchor, W, H, pad);
   const ax = ax0, ay = o.anchor[0] === "b" ? ay0 - lift : ay0;
   const align = o.anchor[1] === "l" ? "left" : o.anchor[1] === "r" ? "right" : "center";
@@ -187,14 +307,26 @@ function drawTextBlock(ctx, W, H, o) {
   if ("letterSpacing" in ctx) ctx.letterSpacing = (ts * (o.ls || 0) / 100) + "px";   // BEFORE wrap so measureText sees it
   const lines = wrap(ctx, title, W - pad * 2, ctx.font);
   const lh = ts * 1.06;
-  const blockH = lines.length * lh + (o.tagline ? ts * 0.52 : 0) + (o.dev ? ts * 0.4 : 0);
+  // pre-wrap the tagline so the block height is exact, not estimated
+  let tagFs = 0, tagLines = [], tagAdv = 0;
+  if (o.tagline) {
+    tagFs = Math.round(ts * 0.34);
+    tagLines = wrap(ctx, o.tagline, W - pad * 2, `${tagFs}px ${font}`);
+    tagAdv = ts * 0.06 + tagLines.length * tagFs * 1.35;
+  }
+  const ulAdv = o.underline ? ts * 0.10 + Math.max(2, Math.round(ts * 0.075)) : 0;
+  const devBelow = o.dev && base >= 0;
+  const devAdv = devBelow ? Math.round(ts * 0.27) * 1.1 : 0;
+  const blockH = lines.length * lh + ulAdv + tagAdv + devAdv;
 
   ctx.textAlign = align; ctx.textBaseline = "alphabetic";
+  // bottom anchor: the block's bottom edge lands exactly on ay
   let y = base === 0 ? ay - blockH / 2 + lh
         : base > 0 ? ay + lh
-        : ay - blockH + lh;
+        : ay - blockH;
 
   const gx = ax;
+  const shOff = o.hardshadow ? Math.max(2, Math.round(ts * 0.055)) : 0;
 
   // title with glow + stroke
   ctx.font = `700 ${ts}px ${font}`;
@@ -203,20 +335,40 @@ function drawTextBlock(ctx, W, H, o) {
     ctx.lineWidth = Math.max(1, ts / 14 * (o.stroke / 70));
     ctx.strokeStyle = hexA(o.strokeCol || "#000000", 0.75);
   }
+  let maxW = 0;
   for (const ln of lines) {
+    const lw = ctx.measureText(ln).width;   // letterSpacing already applied
+    if (lw > maxW) maxW = lw;
     if (o.stroke > 0) ctx.strokeText(ln, gx, y);
+    if (o.hardshadow) {
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = (o.strokeCol && o.strokeCol.toLowerCase() !== "#000000")
+        ? hexA(o.strokeCol, 0.9) : "rgba(0,0,0,0.85)";
+      ctx.fillText(ln, gx + shOff, y + shOff);
+      ctx.restore();
+    }
     ctx.fillStyle = o.text; ctx.fillText(ln, gx, y); y += lh;
   }
   ctx.shadowBlur = 0;
+
+  // accent rule under the title
+  if (o.underline && maxW > 0) {
+    const bh = Math.max(2, Math.round(ts * 0.075));
+    const bx = align === "left" ? gx : align === "right" ? gx - maxW : gx - maxW / 2;
+    y += ts * 0.04;
+    ctx.fillStyle = o.accent;
+    ctx.fillRect(bx, y, maxW, bh);
+    y += bh + ts * 0.06;
+  }
   if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
 
-  if (o.tagline) {
+  if (tagLines.length) {
     y += ts * 0.06;
-    const fs = Math.round(ts * 0.34);
-    ctx.font = `${fs}px ${font}`;
-    ctx.fillStyle = hexA(o.text, 0.85); ctx.shadowColor = "rgba(0,0,0,.8)"; ctx.shadowBlur = fs / 3;
-    for (const ln of wrap(ctx, o.tagline, W - pad * 2, ctx.font)) {
-      ctx.fillText(ln, gx, y + fs); y += fs * 1.35;
+    ctx.font = `${tagFs}px ${font}`;
+    ctx.fillStyle = hexA(o.text, 0.85); ctx.shadowColor = "rgba(0,0,0,.8)"; ctx.shadowBlur = tagFs / 3;
+    for (const ln of tagLines) {
+      ctx.fillText(ln, gx, y + tagFs); y += tagFs * 1.35;
     }
     ctx.shadowBlur = 0;
   }
@@ -279,6 +431,39 @@ function rrect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
+/* ---------- palette extraction ----------
+ * Buckets a downscaled copy of the art into 4-bit color bins, skips near-grays,
+ * returns up to 5 diversified hex colors — the loudest colors in the art. */
+function colorDist(a, b) {
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]);
+}
+function extractPalette(img) {
+  const N = 48;
+  const c = document.createElement("canvas");
+  c.width = N; c.height = Math.max(1, Math.round(N * img.height / img.width));
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.drawImage(img, 0, 0, c.width, c.height);
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  const bins = new Map();
+  for (let i = 0; i < d.length; i += 16) {   // every 4th pixel is plenty
+    const r = d[i] >> 4, g = d[i + 1] >> 4, b = d[i + 2] >> 4;
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 2) continue;  // skip grays
+    const key = (r << 8) | (g << 4) | b;
+    bins.set(key, (bins.get(key) || 0) + 1);
+  }
+  const out = [];
+  for (const [key] of [...bins.entries()].sort((a, b) => b[1] - a[1])) {
+    const hex = "#" + [(key >> 8) & 15, (key >> 4) & 15, key & 15]
+      .map(v => (v * 17).toString(16).padStart(2, "0")).join("");
+    if (out.some(h => colorDist(h, hex) < 48)) continue;  // diversify
+    out.push(hex);
+    if (out.length === 5) break;
+  }
+  return out;
+}
+
 /* ---------- main render ---------- */
 function render(W, H, opts) {
   const t = TEMPLATES[state.template];
@@ -315,21 +500,7 @@ function render(W, H, opts) {
   }
 
   // 4.5 film grain (seeded, stable across refreshes)
-  if (state.grain > 0) {
-    const nz = document.createElement("canvas");
-    const ns = 3; // 1/3-res noise tiled
-    nz.width = Math.ceil(W / ns); nz.height = Math.ceil(H / ns);
-    const nx = nz.getContext("2d");
-    const id = nx.createImageData(nz.width, nz.height);
-    const rnd = mulberry(1234);
-    for (let i = 0; i < id.data.length; i += 4) {
-      const v = (rnd() * 255) | 0;
-      id.data[i] = id.data[i+1] = id.data[i+2] = v; id.data[i+3] = 255;
-    }
-    nx.putImageData(id, 0, 0);
-    x.save(); x.globalAlpha = state.grain / 100 * 0.5; x.globalCompositeOperation = "overlay";
-    x.drawImage(nz, 0, 0, W, H); x.restore();
-  }
+  grainLayer(x, W, H, state.grain / 100 * 0.5, 1234);
 
   // 5. text
   drawTextBlock(x, W, H, {
@@ -338,6 +509,7 @@ function render(W, H, opts) {
     tsize: state.tsize, badges: state.badges, plats: state.plats,
     font: state.font, ls: state.ls, upper: state.upper,
     stroke: state.stroke, strokeCol: state.strokecol,
+    hardshadow: state.hardshadow, underline: state.underline,
   });
 
   // 6. badges
@@ -376,12 +548,15 @@ function refresh() {
 }
 
 /* ---------- export ---------- */
-function download(canvas, name) {
-  const url = canvas.toDataURL("image/png");
+function download(canvas, name, forcePng) {
+  const fmt = (!forcePng && state.format === "jpg") ? "jpg" : "png";
+  const url = canvas.toDataURL(fmt === "jpg" ? "image/jpeg" : "image/png",
+                               fmt === "jpg" ? state.jpgq / 100 : undefined);
+  const fname = name.replace(/\.png$/i, "." + fmt);
   if (window.AndroidBridge && typeof window.AndroidBridge.savePNG === "function") {
-    window.AndroidBridge.savePNG(name, url); return; }   // WebView: hand to native bridge
+    window.AndroidBridge.savePNG(fname, url); return; }   // WebView: hand to native bridge
   const a = document.createElement("a");
-  a.download = name;
+  a.download = fname;
   a.href = url;
   a.click();
 }
@@ -440,6 +615,14 @@ function syncUI() {
   setR("blur", "blurv", state.blur, "px");
   setR("tsize", "tsizev", state.tsize, "auto");
   $("strokecol").value = state.strokecol;
+  $("hardshadow").checked = !!state.hardshadow;
+  $("underline").checked = !!state.underline;
+  $("format").value = state.format;
+  $("jpgq").value = state.jpgq; $("jpgqv").textContent = state.jpgq + "%";
+  $("jpgqrow").hidden = state.format !== "jpg";
+  $("export").textContent = "⬇ Download " + state.format.toUpperCase();
+  document.querySelectorAll("#artstyles button").forEach(b =>
+    b.classList.toggle("on", b.dataset.style === state.sampleStyle));
   document.querySelectorAll("#plats input").forEach((el, i) =>
     el.checked = state.plats.includes(PLATFORMS[i]));
   [...$("tpls").children].forEach((el, i) =>
@@ -506,13 +689,14 @@ function init() {
   $("safe").onchange = e => { state.safe = e.target.checked; refresh(); };
   $("wm").onchange = e => { state.wm = e.target.checked; refresh(); };
 
-  // reset art direction to defaults (keeps uploaded images)
+  // reset art direction to defaults (keeps uploaded images + sample style)
   $("reset").onclick = () => {
     Object.assign(state, {
       template: "ember", size: "cover", font: "block", anchor: "bl",
-      accent: "#ff5c5c", textcolor: "#ffffff",
+      accent: "#ff6b4a", textcolor: "#ffffff",
       glow: 40, vig: 35, grad: 55, tsize: 0, crop: 50,
       ls: 6, upper: true, stroke: 70, strokecol: "#000000",
+      hardshadow: false, underline: false, format: "png", jpgq: 90,
       grain: 0, blur: 0, safe: false, wm: false, scan: false,
       badges: true, plats: ["Windows", "macOS", "Linux", "Web"],
     });
@@ -522,14 +706,14 @@ function init() {
     persist();
   };
 
-  // randomize art direction
+  // randomize art direction — accents roll from a curated list, no muddy randoms
   $("rand").onclick = () => {
     const keys = Object.keys(TEMPLATES), fkeys = Object.keys(FONTS);
     const anchors = ["bl", "bc", "br", "cl", "cc", "cr", "tl", "tc", "tr"];
     state.template = keys[(Math.random() * keys.length) | 0];
     state.font = fkeys[(Math.random() * fkeys.length) | 0];
     state.anchor = anchors[(Math.random() * anchors.length) | 0];
-    state.accent = "#" + ((Math.random() * 0xffffff) | 0).toString(16).padStart(6, "0");
+    state.accent = CURATED_ACCENTS[(Math.random() * CURATED_ACCENTS.length) | 0];
     syncUI();
     if (!state.images.length) genSample(true);
     refresh();
@@ -587,7 +771,74 @@ function init() {
   document.addEventListener("drop", e => e.preventDefault());
 
   addSampleTile();
-  $("sample").onclick = () => { genSample(true); state.bgIndex = -1; markThumb(-1); };
+
+  // sample-art styles: segmented picker — regenerates the stand-in and selects it
+  const asg = $("artstyles");
+  for (const [key, label] of SAMPLE_STYLES) {
+    const b = document.createElement("button");
+    b.textContent = label; b.dataset.style = key;
+    b.className = key === state.sampleStyle ? "on" : "";
+    b.onclick = () => {
+      state.sampleStyle = key;
+      [...asg.children].forEach(el => el.classList.toggle("on", el.dataset.style === key));
+      genSample(true);
+      state.bgIndex = -1; markThumb(-1);
+      refresh(); persist();
+    };
+    asg.appendChild(b);
+  }
+
+  // curated art-direction presets — one click sets a whole look
+  const prg = $("presets");
+  for (const [key, p] of Object.entries(PRESETS)) {
+    const b = document.createElement("button");
+    b.className = "preset";
+    const nm = document.createElement("b"); nm.textContent = p.label;
+    const ds = document.createElement("i"); ds.textContent = p.desc;
+    b.appendChild(nm); b.appendChild(ds);
+    b.onclick = () => {
+      Object.assign(state, p.apply);
+      if (!state.images.length) genSample(true);
+      syncUI(); refresh(); persist();
+    };
+    prg.appendChild(b);
+  }
+
+  // palette extraction — loudest colors from the current backdrop
+  $("pullpal").onclick = () => {
+    const src = state.bgIndex >= 0 ? state.images[state.bgIndex] : state.sample;
+    const row = $("palrow");
+    row.innerHTML = "";
+    if (!src) return;
+    const pal = extractPalette(src);
+    if (!pal.length) {
+      row.innerHTML = `<span class="hint">No strong colors in this one — try a busier screenshot.</span>`;
+      return;
+    }
+    for (const hex of pal) {
+      const s = document.createElement("button");
+      s.className = "palswatch"; s.style.background = hex; s.title = hex;
+      s.onclick = () => { state.accent = hex; $("accent").value = hex; refresh(); persist(); };
+      row.appendChild(s);
+    }
+  };
+
+  // export format
+  const updExportLabel = () => { $("export").textContent = "⬇ Download " + state.format.toUpperCase(); };
+  $("format").onchange = e => {
+    state.format = e.target.value;
+    $("jpgqrow").hidden = state.format !== "jpg";
+    updExportLabel(); refresh();
+  };
+  $("jpgq").oninput = e => {
+    state.jpgq = +e.target.value;
+    $("jpgqv").textContent = e.target.value + "%";
+  };
+  updExportLabel();
+
+  // title effects
+  $("hardshadow").onchange = e => { state.hardshadow = e.target.checked; refresh(); };
+  $("underline").onchange = e => { state.underline = e.target.checked; refresh(); };
 
   // export
   $("export").onclick = () => {
@@ -606,7 +857,7 @@ function init() {
   $("contactsheet").onclick = showContactSheet;
   $("sheetclose").onclick = closeContactSheet;
   $("sheetdl").onclick = () =>
-    download(window.__sheetCanvas, `${slug(state.title)}-contact-sheet.png`);
+    download(window.__sheetCanvas, `${slug(state.title)}-contact-sheet.png`, true);
   $("sheetmodal").addEventListener("click", e => {
     if (e.target === $("sheetmodal")) closeContactSheet();
   });
@@ -620,8 +871,8 @@ function init() {
     if (saved) Object.assign(state, saved);
   } catch (e) {}
   const persist = () => {
-    const { title, tagline, dev, accent, textcolor, template, size, anchor, glow, vig, grad, tsize, crop, badges, plats, font, ls, upper, stroke, strokecol, grain, blur, safe, wm } = state;
-    try { localStorage.setItem("capsuleforge", JSON.stringify({ title, tagline, dev, accent, textcolor, template, size, anchor, glow, vig, grad, tsize, crop, badges, plats, font, ls, upper, stroke, strokecol, grain, blur, safe, wm })); } catch (e) {}
+    const { title, tagline, dev, accent, textcolor, template, size, anchor, glow, vig, grad, tsize, crop, badges, plats, font, ls, upper, stroke, strokecol, grain, blur, safe, wm, sampleStyle, hardshadow, underline, format, jpgq } = state;
+    try { localStorage.setItem("capsuleforge", JSON.stringify({ title, tagline, dev, accent, textcolor, template, size, anchor, glow, vig, grad, tsize, crop, badges, plats, font, ls, upper, stroke, strokecol, grain, blur, safe, wm, sampleStyle, hardshadow, underline, format, jpgq })); } catch (e) {}
   };
   document.addEventListener("input", persist);
   document.addEventListener("change", persist);
@@ -634,8 +885,8 @@ function init() {
 function genSample(force) {
   if (state.sample && !force) return;
   const t = TEMPLATES[state.template];
-  state.sample = makeSampleArt(1280, 720, t.glow, [...state.title].reduce((a, c) => a + c.charCodeAt(0), 7));
-  if (state.bgIndex < 0) state.bgIndex = -1; // sample used when no uploaded image selected
+  state.sample = makeSampleArt(1280, 720, t.glow, t.g[1],
+    seedFrom(state.title, state.sampleStyle), state.sampleStyle);
   refresh();
 }
 
@@ -745,4 +996,4 @@ initTouchSliders();
 
 init();
 /* test hook */
-window.__cf = { state, render, SIZES, TEMPLATES, FONTS, PLATFORMS, CONFIG, ITCH_URL, syncUI, refresh, hexA, drawCover };
+window.__cf = { state, render, SIZES, TEMPLATES, FONTS, PLATFORMS, CONFIG, ITCH_URL, PRESETS, SAMPLE_STYLES, syncUI, refresh, hexA, drawCover, extractPalette, seedFrom, makeSampleArt };

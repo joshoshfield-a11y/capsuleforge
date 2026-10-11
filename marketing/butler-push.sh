@@ -21,7 +21,7 @@ set -euo pipefail
 
 ITCH_USER="${ITCH_USER:-SkiticusPrime}"   # <-- your itch.io username (or export ITCH_USER)
 PROJECT="$ITCH_USER/capsuleforge"
-VERSION="1.2.0"
+VERSION="1.3.0"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/.." && pwd)"
 OUT="$DIR"
@@ -53,7 +53,7 @@ python3 - "$TMP/index.html" "$UPSELL" <<'EOF'
 import sys
 p, url = sys.argv[1], sys.argv[2]
 s = open(p).read()
-old = '<button id="exportall" style="width:100%">⬇⬇ Export every size (itch.io + Steam)</button>'
+old = '<button id="exportall" style="width:100%">⬇⬇ Export every size</button>'
 new = f'<button style="width:100%" onclick="window.open(\'{url}\',\'_blank\')">⬆ Get batch export + Steam sizes — full version</button>'
 assert old in s, "exportall button markup changed — update this script"
 open(p, "w").write(s.replace(old, new))
